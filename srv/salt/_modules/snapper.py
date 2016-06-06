@@ -74,6 +74,15 @@ def _dbus_exception_to_reason(exc):
 
 
 def list_snapshots(config='root'):
+    '''
+    List available snapshots
+
+    CLI example:
+
+    .. code-block:: bash
+
+        salt '*' snapper.list_snapshots config=myconfig
+    '''
     try:
         snapshots = snapper.ListSnapshots(config)
         return [_snapshot_to_data(s) for s in snapshots]
@@ -85,6 +94,15 @@ def list_snapshots(config='root'):
 
 
 def get_snapshot(number=0, config='root'):
+    '''
+    Get detailed information about a given snapshot
+
+    CLI example:
+
+    .. code-block:: bash
+
+        salt '*' snapper.get_snapshot 1
+    '''
     try:
         snapshot = snapper.GetSnapshot(config, int(number))
         return _snapshot_to_data(snapshot)
@@ -96,6 +114,15 @@ def get_snapshot(number=0, config='root'):
 
 
 def list_configs():
+    '''
+    List all available configs
+
+    CLI example:
+
+    .. code-block:: bash
+
+        salt '*' snapper.list_configs
+    '''
     try:
         configs = snapper.ListConfigs()
         return dict((config[0], config[2]) for config in configs)
@@ -113,6 +140,21 @@ def _config_filter(x):
 
 
 def set_config(name='root', **kwargs):
+    '''
+    Set configuration values
+
+    CLI example:
+
+    .. code-block:: bash
+
+        salt '*' snapper.set_config SYNC_ACL=True
+
+    Keys are case insensitive as they will be always uppercased to
+    snapper convention. The above example is equivalent to:
+
+    .. code-block:: bash
+        salt '*' snapper.set_config sync_acl=True
+    '''
     try:
         data = dict((k.upper(), _config_filter(v)) for k, v in
                     kwargs.iteritems() if not k.startswith('__'))
@@ -122,6 +164,7 @@ def set_config(name='root', **kwargs):
             'Error encountered while setting configuration {0}: {1}'
             .format(name, _dbus_exception_to_reason(exc))
         )
+    return True
 
 
 def _get_last_snapshot(config='root'):
@@ -130,6 +173,15 @@ def _get_last_snapshot(config='root'):
 
 
 def get_config(name='root'):
+    '''
+    Retrieves all values from a given configuration
+
+    CLI example:
+
+    .. code-block:: bash
+
+      salt '*' snapper.get_config
+    '''
     try:
         config = snapper.GetConfig(name)
         return config
