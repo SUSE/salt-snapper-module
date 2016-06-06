@@ -252,13 +252,41 @@ def create_snapshot(config='root', type='single', pre_number=None,
     return nr
 
 
-def changed_files(config='root', num_pre=None, num_post=None):
-    try:
-        num_post = num_post if num_post else _get_last_snapshot(config)['id']
-        num_pre = num_pre if num_pre else int(num_post)-1
+def _get_num_interval(config, num_pre, num_post):
+    post = int(num_post) if num_post else _get_last_snapshot(config)['id']
+    pre = int(num_pre) if num_pre else int(post)-1
+    return pre, post
 
-        snapper.CreateComparison(config, int(num_pre), int(num_post))
-        files = snapper.GetFiles(config, int(num_pre), int(num_post))
+
+def _is_text_file(filename):
+    type_of_file = os.popen('file -bi {0}'.format(filename), 'r').read()
+    return type_of_file.startswith('text')
+
+
+def changed_files(config='root', num_pre=None, num_post=None):
+    '''
+    Returns the files changed between two snapshots
+
+    config
+        Configuration name.
+
+    num_pre
+        first snapshot ID to compare. Default is last snapshot ID-1
+
+    num_post
+        last snapshot ID to compare. Default is last snapshot ID
+
+    CLI example:
+
+    .. code-block:: bash
+
+        salt '*' snapper.diff
+        salt '*' snapper.diff filename=/var/log/snapper.log num_pre=19 num_post=20
+    '''
+    try:
+        pre, post = _get_num_interval(config, num_pre, num_post)
+        snapper.CreateComparison(config, int(pre), int(post))
+        files = snapper.GetFiles(config, int(pre), int(post))
         return [file[0] for file in files]
     except dbus.DBusException as exc:
         raise CommandExecutionError(
@@ -267,14 +295,12 @@ def changed_files(config='root', num_pre=None, num_post=None):
         )
 
 
-def _is_text_file(filename):
-    type_of_file = os.popen('file -bi {0}'.format(filename), 'r').read()
-    return type_of_file.startswith('text')
-
-
 def diff(config='root', filename=None, num_pre=None, num_post=None):
     '''
     Returns the differences between two snapshots
+
+    config
+        Configuration name.
 
     filename
         if not provided the showing differences between snapshots for
@@ -294,12 +320,11 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
         salt '*' snapper.diff filename=/var/log/snapper.log num_pre=19 num_post=20
     '''
     try:
-        num_post = num_post if num_post else _get_last_snapshot(config)['id']
-        num_pre = num_pre if num_pre else int(num_post)-1
+        pre, post = _get_num_interval(config, num_pre, num_post)
 
-        files = changed_files(config, num_pre, num_post) if not filename else [filename]
-        pre_mount = snapper.MountSnapshot(config, num_pre, False)
-        post_mount = snapper.MountSnapshot(config, num_post, False)
+        files = changed_files(config, pre, post) if not filename else [filename]
+        pre_mount = snapper.MountSnapshot(config, pre, False)
+        post_mount = snapper.MountSnapshot(config, post, False)
 
         files_diff = dict()
         for f in filter(lambda x: os.path.isfile(x), files):
@@ -315,8 +340,8 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
                                                              fromfile=pre_file,
                                                              tofile=post_file))
 
-        snapper.UmountSnapshot(config, num_pre, False)
-        snapper.UmountSnapshot(config, num_post, False)
+        snapper.UmountSnapshot(config, pre, False)
+        snapper.UmountSnapshot(config, post, False)
         return files_diff
     except dbus.DBusException as exc:
         raise CommandExecutionError(
