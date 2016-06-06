@@ -192,6 +192,66 @@ def get_config(name='root'):
         )
 
 
+def create_snapshot(config='root', type='single', pre_number=None,
+                    description='', cleanup_algorithm='number', userdata={}):
+    '''
+    Creates an snapshot
+
+    config
+        Configuration name.
+    type
+        Specifies the type of the new snapshot. Possible values are
+        single, pre and post.
+    pre_number
+        For post snapshots the number of the pre snapshot must be
+        provided.
+    description
+        Description for the snapshot. If not given, the salt job will be used.
+    cleanup_algorithm
+        Set the cleanup algorithm for the snapshot.
+
+        number
+            Deletes old snapshots when a certain number of snapshots
+            is reached.
+        timeline
+            Deletes old snapshots but keeps a number of hourly,
+            daily, weekly, monthly and yearly snapshots.
+        empty-pre-post
+            Deletes pre/post snapshot pairs with empty diffs.
+    userdata
+        Set userdata for the snapshot (key-value pairs).
+
+    Returns the number of the created snapshot.
+
+    .. code-block:: bash
+        salt '*' snapper.create_snapshot
+    '''
+    nr = None
+    try:
+        if type == 'single':
+            nr = snapper.CreateSingleSnapshot(config, description,
+                                              cleanup_algorithm, userdata)
+        elif type == 'pre':
+            nr = snapper.CreatePreSnapshot(config, description,
+                                           cleanup_algorithm, userdata)
+        elif type == 'post':
+            if pre_number is None:
+                raise CommandExecutionError(
+                    "pre snapshot number 'pre_number' needs to be"
+                    "specified for snapshots of the 'post' type")
+            nr = snapper.CreatePostSnapshot(config, pre_number, description,
+                                            cleanup_algorithm, userdata)
+        else:
+            raise CommandExecutionError(
+                "Invalid snapshot type '{0}'", format(type))
+    except dbus.DBusException as exc:
+        raise CommandExecutionError(
+            'Error encountered while listing changed files: {0}'
+            .format(_dbus_exception_to_reason(exc))
+        )
+    return nr
+
+
 def changed_files(config='root', num_pre=None, num_post=None):
     try:
         num_post = num_post if num_post else _get_last_snapshot(config)['id']
