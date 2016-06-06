@@ -163,6 +163,7 @@ def set_config(name='root', **kwargs):
             'Error encountered while setting configuration {0}: {1}'
             .format(name, _dbus_exception_to_reason(exc))
         )
+    return True
 
 
 def get_config(name='root'):
