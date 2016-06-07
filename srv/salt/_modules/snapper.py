@@ -12,7 +12,6 @@ import os
 import time
 import difflib
 from pwd import getpwuid
-from sets import Set
 
 try:
     import dbus
@@ -393,8 +392,8 @@ def undo(config='root', files=None, num_pre=None, num_post=None):
     pre, post = _get_num_interval(config, num_pre, num_post)
 
     changes = status(config, pre, post)
-    changed = Set(changes.keys())
-    requested = Set(files or changed)
+    changed = set(changes.keys())
+    requested = set(files or changed)
 
     if not requested.issubset(changed):
         raise CommandExecutionError(
