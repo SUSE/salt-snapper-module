@@ -280,8 +280,8 @@ def changed_files(config='root', num_pre=None, num_post=None):
 
     .. code-block:: bash
 
-        salt '*' snapper.diff
-        salt '*' snapper.diff filename=/var/log/snapper.log num_pre=19 num_post=20
+        salt '*' snapper.changed_files
+        salt '*' snapper.changed_files num_pre=19 num_post=20
     '''
     try:
         pre, post = _get_num_interval(config, num_pre, num_post)
