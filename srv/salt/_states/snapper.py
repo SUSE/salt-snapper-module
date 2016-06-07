@@ -1,5 +1,6 @@
 import salt.loader
 import logging
+import os
 
 log = logging.getLogger(__name__)
 
@@ -7,11 +8,8 @@ log = logging.getLogger(__name__)
 def __virtual__():
     return True
 
-def snapshot(
-        name,
-        number=None,
-        config='root',
-        ignore=[]):
+
+def snapshot(name, number=None, config='root', ignore=[]):
     '''
     Enforces that no file is modified comparing against a previously
     defined snapshot identified by number.
@@ -32,8 +30,12 @@ def snapshot(
 
     status = __salt__['snapper.status'](
         config, num_pre=number, num_post=0)
+
     for f in ignore:
-        del status[f]
+        if os.path.isfile(f):
+            status.pop(f, None)
+        elif os.path.isdir(f):
+            [status.pop(x, None) for x in status.keys() if x.startswith(f)]
 
     ret['changes']['files'] = status
     return ret
