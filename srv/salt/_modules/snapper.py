@@ -12,6 +12,7 @@ import os
 import time
 import difflib
 from pwd import getpwuid
+from sets import Set
 
 try:
     import dbus
@@ -172,6 +173,14 @@ def _get_last_snapshot(config='root'):
     return snapshot_list[-1]
 
 
+def _status_to_string(status):
+    '''
+    Converts a numeric dbus snapper status into a string
+    '''
+    return {2: 'deleted', 8: 'modified',
+            1: 'created', 16: 'path'}.get(int(status), 'unknown')
+
+
 def get_config(name='root'):
     '''
     Retrieves all values from a given configuration
@@ -310,6 +319,41 @@ def run(config='root', function=None, args=[], description=None,
     return ret
 
 
+def status(config='root', num_pre=None, num_post=None):
+        '''
+    Returns a comparison between two snapshots
+
+    config
+        Configuration name.
+
+    num_pre
+        first snapshot ID to compare. Default is last snapshot
+
+    num_post
+        last snapshot ID to compare. Default is 0 (current state)
+
+    CLI example:
+
+    .. code-block:: bash
+
+        salt '*' snapper.status
+        salt '*' snapper.status num_pre=19 num_post=20
+    '''
+        try:
+            pre, post = _get_num_interval(config, num_pre, num_post)
+            snapper.CreateComparison(config, int(pre), int(post))
+            files = snapper.GetFiles(config, int(pre), int(post))
+            status = {}
+            for file in files:
+                status[file[0]] = _status_to_string(file[1])
+            return status
+        except dbus.DBusException as exc:
+            raise CommandExecutionError(
+                'Error encountered while listing changed files: {0}'
+                .format(_dbus_exception_to_reason(exc))
+            )
+
+
 def changed_files(config='root', num_pre=None, num_post=None):
     '''
     Returns the files changed between two snapshots
@@ -330,16 +374,41 @@ def changed_files(config='root', num_pre=None, num_post=None):
         salt '*' snapper.changed_files
         salt '*' snapper.changed_files num_pre=19 num_post=20
     '''
-    try:
-        pre, post = _get_num_interval(config, num_pre, num_post)
-        snapper.CreateComparison(config, int(pre), int(post))
-        files = snapper.GetFiles(config, int(pre), int(post))
-        return [file[0] for file in files]
-    except dbus.DBusException as exc:
+    return status(config, num_pre, num_post).keys()
+
+
+def undo(config='root', files=None, num_pre=None, num_post=None):
+    '''
+    Undo all file changes that happened between num_pre and num_post, leaving
+    the files into the state of num_pre.
+
+    .. warning::
+        If one of the files has changes after num_post, they will be overwriten
+        The snapshots are used to determine the file list, but the current
+        version of the files will be overwritten by the versions in num_pre.
+
+        You to undo changes between num_pre and the current version of the
+        files use num_post=0.
+    '''
+    pre, post = _get_num_interval(config, num_pre, num_post)
+
+    changes = status(config, pre, post)
+    changed = Set(changes.keys())
+    requested = Set(files or changed)
+
+    if not requested.issubset(changed):
         raise CommandExecutionError(
-            'Error encountered while listing changed files: {0}'
-            .format(_dbus_exception_to_reason(exc))
-        )
+            'Given file list contains files that are not present'
+            'in the changed filelist: {0}'.format(changed - requested))
+
+    cmdret = __salt__['cmd.run']('snapper undochange {0}..{1} {2}'.format(
+        pre, post, ' '.join(requested)))
+    components = cmdret.split(' ')
+    ret = {}
+    for comp in components:
+        key, val = comp.split(':')
+        ret[key] = val
+    return ret
 
 
 def diff(config='root', filename=None, num_pre=None, num_post=None):
