@@ -263,6 +263,47 @@ def _is_text_file(filename):
     return type_of_file.startswith('text')
 
 
+def run(config='root', function=None, args=[], description=None,
+        cleanup_algorithm='number', userdata={}, **kwargs):
+    '''
+    Runs a function from an execution module creating pre and post snapshots
+    and associating the salt job id with those snapshots for easy undo and
+    cleanup.
+
+    .. code-block:: bash
+        salt '*' snapper.run function=file.append \
+          args='["/etc/motd", "some text"]
+
+    This  would run append text to /etc/motd using the file.append
+    module, and will create two snapshots, pre and post with the associated
+    metadata. The jid will be available as salt_jid in the userdata of the
+    snapshot.
+
+    You can immediately see the changes
+    .. code-block:: bash
+        salt '*' snapper.diff
+    '''
+    pre_nr = __salt__['snapper.create_snapshot'](
+        config=config,
+        type='pre',
+        description=description,
+        cleanup_algorithm=cleanup_algorithm,
+        userdata=userdata,
+        **kwargs)
+
+    ret = __salt__[function](*args, **kwargs)
+
+    __salt__['snapper.create_snapshot'](
+        config=config,
+        type='post',
+        pre_number=pre_nr,
+        description=description,
+        cleanup_algorithm=cleanup_algorithm,
+        userdata=userdata,
+        **kwargs)
+    return ret
+
+
 def changed_files(config='root', num_pre=None, num_post=None):
     '''
     Returns the files changed between two snapshots
