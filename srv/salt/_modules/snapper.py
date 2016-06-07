@@ -388,10 +388,36 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
                                                              tofile=post_file))
 
         snapper.UmountSnapshot(config, pre, False)
-        snapper.UmountSnapshot(config, post, False)
+        if post:
+            snapper.UmountSnapshot(config, post, False)
         return files_diff
     except dbus.DBusException as exc:
         raise CommandExecutionError(
             'Error encountered while showing differences between snapshots: {0}'
             .format(_dbus_exception_to_reason(exc))
         )
+
+
+def diff_jid(jid, config='root'):
+    '''
+    Returns the changes applied by a `jid`
+
+    jid
+        The job id to lookup
+
+    config
+        Configuration name.
+
+    CLI example:
+
+    .. code-block:: bash
+
+        salt '*' snapper.diff_jid
+    '''
+    jid_snapshots = filter(lambda x: x['userdata'].get("salt_jid", False) == jid,
+                           list_snapshots(config))
+
+    pre_snapshot = filter(lambda x: x['type'] == "pre", jid_snapshots)[0]['id']
+    post_snapshot = filter(lambda x: x['type'] == "post", jid_snapshots)[0]['id']
+
+    return diff(config, num_pre=pre_snapshot, num_post=post_snapshot)
