@@ -193,7 +193,8 @@ def get_config(name='root'):
 
 
 def create_snapshot(config='root', type='single', pre_number=None,
-                    description='', cleanup_algorithm='number', userdata={}):
+                    description=None, cleanup_algorithm='number', userdata={},
+                    **kwargs):
     '''
     Creates an snapshot
 
