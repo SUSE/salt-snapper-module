@@ -288,8 +288,6 @@ def run(config='root', function=None, args=[], description=None,
     snapshot.
 
     You can immediately see the changes
-    .. code-block:: bash
-        salt '*' snapper.diff
     '''
     pre_nr = __salt__['snapper.create_snapshot'](
         config=config,
