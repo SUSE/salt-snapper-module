@@ -227,6 +227,13 @@ def create_snapshot(config='root', type='single', pre_number=None,
     .. code-block:: bash
         salt '*' snapper.create_snapshot
     '''
+    jid = kwargs.get('__pub_jid', None)
+    if description is None and jid is not None:
+        description = 'salt job {0}'.format(jid)
+
+    if jid is not None:
+        userdata['salt_jid'] = jid
+
     nr = None
     try:
         if type == 'single':
