@@ -410,6 +410,36 @@ def undo(config='root', files=None, num_pre=None, num_post=None):
     return ret
 
 
+def _get_jid_snapshot(jid, config='root'):
+    jid_snapshots = filter(lambda x: x['userdata'].get("salt_jid", False) == jid,
+                           list_snapshots(config))
+
+    return (
+        filter(lambda x: x['type'] == "pre", jid_snapshots)[0]['id'],
+        filter(lambda x: x['type'] == "post", jid_snapshots)[0]['id']
+    )
+
+
+def undo_jid(jid, config='root'):
+    '''
+    Undo the changes applied by a salt job
+
+    jid
+        The job id to lookup
+
+    config
+        Configuration name.
+
+    CLI example:
+
+    .. code-block:: bash
+
+        salt '*' snapper.undo_jid jid=20160607130930720112
+    '''
+    pre_snapshot, post_snapshot = _get_jid_snapshot(jid, config=config)
+    return undo(config, num_pre=pre_snapshot, num_post=post_snapshot)
+
+
 def diff(config='root', filename=None, num_pre=None, num_post=None):
     '''
     Returns the differences between two snapshots
@@ -480,12 +510,7 @@ def diff_jid(jid, config='root'):
 
     .. code-block:: bash
 
-        salt '*' snapper.diff_jid
+        salt '*' snapper.diff_jid jid=20160607130930720112
     '''
-    jid_snapshots = filter(lambda x: x['userdata'].get("salt_jid", False) == jid,
-                           list_snapshots(config))
-
-    pre_snapshot = filter(lambda x: x['type'] == "pre", jid_snapshots)[0]['id']
-    post_snapshot = filter(lambda x: x['type'] == "post", jid_snapshots)[0]['id']
-
+    pre_snapshot, post_snapshot = _get_jid_snapshot(jid, config=config)
     return diff(config, num_pre=pre_snapshot, num_post=post_snapshot)
