@@ -261,8 +261,8 @@ def create_snapshot(config='root', type='single', pre_number=None,
 
 
 def _get_num_interval(config, num_pre, num_post):
-    post = int(num_post) if num_post else _get_last_snapshot(config)['id']
-    pre = int(num_pre) if num_pre else int(post)-1
+    post = int(num_post) if num_post else 0
+    pre = int(num_pre) if num_pre else _get_last_snapshot(config)['id']
     return pre, post
 
 
@@ -320,10 +320,10 @@ def changed_files(config='root', num_pre=None, num_post=None):
         Configuration name.
 
     num_pre
-        first snapshot ID to compare. Default is last snapshot ID-1
+        first snapshot ID to compare. Default is last snapshot
 
     num_post
-        last snapshot ID to compare. Default is last snapshot ID
+        last snapshot ID to compare. Default is 0 (current state)
 
     CLI example:
 
@@ -356,10 +356,10 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
         all "text" files
 
     num_pre
-        first snapshot ID to compare. Default is last snapshot ID-1
+        first snapshot ID to compare. Default is last snapshot
 
     num_post
-        last snapshot ID to compare. Default is last snapshot ID
+        last snapshot ID to compare. Default is 0 (current state)
 
     CLI example:
 
@@ -373,7 +373,7 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
 
         files = changed_files(config, pre, post) if not filename else [filename]
         pre_mount = snapper.MountSnapshot(config, pre, False)
-        post_mount = snapper.MountSnapshot(config, post, False)
+        post_mount = snapper.MountSnapshot(config, post, False) if post else ""
 
         files_diff = dict()
         for f in filter(lambda x: os.path.isfile(x), files):
