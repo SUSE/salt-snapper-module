@@ -345,7 +345,7 @@ def status(config='root', num_pre=None, num_post=None):
             files = snapper.GetFiles(config, int(pre), int(post))
             status = {}
             for file in files:
-                status[file[0]] = _status_to_string(file[1])
+                status[file[0]] = file[1]
             return status
         except dbus.DBusException as exc:
             raise CommandExecutionError(
