@@ -60,13 +60,13 @@ def _snapshot_to_data(snapshot):
     return data
 
 
-def _dbus_exception_to_reason(exc):
+def _dbus_exception_to_reason(exc, args):
     '''
     Returns a error message from a snapper DBusException
     '''
     error = exc.get_dbus_name()
     if error == 'error.unknown_config':
-        return 'Unknown configuration'
+        return "Unknown configuration '{0}'".format(args['config'])
     elif error == 'error.illegal_snapshot':
         return 'Invalid snapshot'
     else:
@@ -89,7 +89,7 @@ def list_snapshots(config='root'):
     except dbus.DBusException as exc:
         raise CommandExecutionError(
             'Error encountered while listing snapshots: {0}'
-            .format(_dbus_exception_to_reason(exc))
+            .format(_dbus_exception_to_reason(exc, locals()))
         )
 
 
@@ -109,7 +109,7 @@ def get_snapshot(number=0, config='root'):
     except dbus.DBusException as exc:
         raise CommandExecutionError(
             'Error encountered while retrieving snapshot: {0}'
-            .format(_dbus_exception_to_reason(exc))
+            .format(_dbus_exception_to_reason(exc, locals()))
         )
 
 
@@ -129,7 +129,7 @@ def list_configs():
     except dbus.DBusException as exc:
         raise CommandExecutionError(
             'Error encountered while listing configurations: {0}'
-            .format(_dbus_exception_to_reason(exc))
+            .format(_dbus_exception_to_reason(exc, locals()))
         )
 
 
@@ -162,7 +162,7 @@ def set_config(name='root', **kwargs):
     except dbus.DBusException as exc:
         raise CommandExecutionError(
             'Error encountered while setting configuration {0}: {1}'
-            .format(name, _dbus_exception_to_reason(exc))
+            .format(name, _dbus_exception_to_reason(exc, locals()))
         )
     return True
 
@@ -196,7 +196,7 @@ def get_config(name='root'):
     except dbus.DBusException as exc:
         raise CommandExecutionError(
             'Error encountered while retrieving configuration: {0}'
-            .format(_dbus_exception_to_reason(exc))
+            .format(_dbus_exception_to_reason(exc, locals()))
         )
 
 
@@ -263,7 +263,7 @@ def create_snapshot(config='root', type='single', pre_number=None,
     except dbus.DBusException as exc:
         raise CommandExecutionError(
             'Error encountered while listing changed files: {0}'
-            .format(_dbus_exception_to_reason(exc))
+            .format(_dbus_exception_to_reason(exc, locals()))
         )
     return nr
 
@@ -349,7 +349,7 @@ def status(config='root', num_pre=None, num_post=None):
         except dbus.DBusException as exc:
             raise CommandExecutionError(
                 'Error encountered while listing changed files: {0}'
-                .format(_dbus_exception_to_reason(exc))
+                .format(_dbus_exception_to_reason(exc, locals()))
             )
 
 
@@ -492,7 +492,7 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
     except dbus.DBusException as exc:
         raise CommandExecutionError(
             'Error encountered while showing differences between snapshots: {0}'
-            .format(_dbus_exception_to_reason(exc))
+            .format(_dbus_exception_to_reason(exc, locals()))
         )
 
 
