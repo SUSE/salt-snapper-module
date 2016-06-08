@@ -46,7 +46,10 @@ def baseline_snapshot(name, number=None, config='root', ignore=[]):
                                                          num_pre=0,
                                                          num_post=number, filename=f)
 
-    ret['changes']['files'] = status
+    if status:
+        ret['changes']['files'] = status
+    else:
+        ret['comment'] = "No changes were done"
 
     if not __opts__['test'] and status.keys():
         undo = __salt__['snapper.undo'](config, num_pre=number, num_post=0,
@@ -60,5 +63,6 @@ def baseline_snapshot(name, number=None, config='root', ignore=[]):
     elif __opts__['test'] and not status:
         ret['result'] = None if not status else True
         ret['changes'] = {}
+        ret['comment'] = "Nothing to be done"
 
     return ret
