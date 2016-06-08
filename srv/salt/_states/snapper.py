@@ -9,7 +9,7 @@ def __virtual__():
     return True
 
 
-def snapshot(name, number=None, config='root', ignore=[]):
+def baseline_snapshot(name, number=None, config='root', ignore=[]):
     '''
     Enforces that no file is modified comparing against a previously
     defined snapshot identified by number.
@@ -38,13 +38,26 @@ def snapshot(name, number=None, config='root', ignore=[]):
             [status.pop(x, None) for x in status.keys() if x.startswith(f)]
 
     # Only include changes for modified files
-    for f in [x for x in status if __salt__['snapper.status_to_string'](status[x]) == "modified"]:
-        status.update(__salt__['snapper.diff'](config, num_pre=number, num_post=0, filename=f))
+    for f in status:
+        status[f]['action'] = status[f].pop("status")
+        if "modified" in status[f]['action']:
+            status[f]['diff'] = __salt__['snapper.diff'](config,
+                                                         num_pre=number,
+                                                         num_post=0, filename=f)
 
     if not __opts__['test'] and status.keys():
-        undo = __salt__['snapper.undo'](config, num_pre=number, num_post=0, files=status.keys())
+        undo = __salt__['snapper.undo'](config, num_pre=number, num_post=0,
+                                        files=status.keys())
         ret['changes']['sumary'] = undo
 
     ret['changes']['files'] = status
+
+    if __opts__['test'] and status:
+        ret['pchanges'] = ret["changes"]
+        ret['changes'] = {}
+        ret['comment'] = "{0} files changes are set to be undone".format(len(status.keys()))
+        ret['result'] = None
+    elif not status:
+        ret['result'] = True
+
     return ret
-         
