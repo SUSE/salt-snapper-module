@@ -19,6 +19,8 @@ try:
 except ImportError:
     HAS_DBUS = False
 
+log = logging.getLogger(__name__)
+
 
 def __virtual__():
     if not HAS_DBUS:
@@ -176,8 +178,24 @@ def status_to_string(status):
     '''
     Converts a numeric dbus snapper status into a string
     '''
-    return {2: 'created', 8: 'modified',
-            1: 'deleted'}.get(int(status), 'unknown')
+    STATUS_MAP = {
+        1: "deleted",
+        2: "created",
+        8: "modified",
+        16: "permission changed",
+        32: "owner changed",
+        64: "group changed",
+        128: "extended attributes changed",
+        256: "ACL info changed",
+    }
+
+    status_tuple = (
+        status & 0b00000001, status & 0b000000010, status & 0b00000100,
+        status & 0b00001000, status & 0b000010000, status & 0b00100000,
+        status & 0b01000000, status & 0b100000000,
+    )
+
+    return [STATUS_MAP[status] for status in status_tuple if status]
 
 
 def get_config(name='root'):
@@ -319,7 +337,7 @@ def run(config='root', function=None, args=[], description=None,
 
 
 def status(config='root', num_pre=None, num_post=None):
-        '''
+    '''
     Returns a comparison between two snapshots
 
     config
@@ -338,19 +356,19 @@ def status(config='root', num_pre=None, num_post=None):
         salt '*' snapper.status
         salt '*' snapper.status num_pre=19 num_post=20
     '''
-        try:
-            pre, post = _get_num_interval(config, num_pre, num_post)
-            snapper.CreateComparison(config, int(pre), int(post))
-            files = snapper.GetFiles(config, int(pre), int(post))
-            status = {}
-            for file in files:
-                status[file[0]] = file[1]
-            return status
-        except dbus.DBusException as exc:
-            raise CommandExecutionError(
-                'Error encountered while listing changed files: {0}'
-                .format(_dbus_exception_to_reason(exc))
-            )
+    try:
+        pre, post = _get_num_interval(config, num_pre, num_post)
+        snapper.CreateComparison(config, int(pre), int(post))
+        files = snapper.GetFiles(config, int(pre), int(post))
+        status = {}
+        for file in files:
+            status[file[0]] = {'status': status_to_string(file[1])}
+        return status
+    except dbus.DBusException as exc:
+        raise CommandExecutionError(
+            'Error encountered while listing changed files: {0}'
+            .format(_dbus_exception_to_reason(exc))
+        )
 
 
 def changed_files(config='root', num_pre=None, num_post=None):
