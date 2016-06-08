@@ -410,7 +410,7 @@ def undo(config='root', files=None, num_pre=None, num_post=None):
     return ret
 
 
-def _get_jid_snapshot(jid, config='root'):
+def _get_jid_snapshots(jid, config='root'):
     jid_snapshots = filter(lambda x: x['userdata'].get("salt_jid", False) == jid,
                            list_snapshots(config))
 
@@ -436,7 +436,7 @@ def undo_jid(jid, config='root'):
 
         salt '*' snapper.undo_jid jid=20160607130930720112
     '''
-    pre_snapshot, post_snapshot = _get_jid_snapshot(jid, config=config)
+    pre_snapshot, post_snapshot = _get_jid_snapshots(jid, config=config)
     return undo(config, num_pre=pre_snapshot, num_post=post_snapshot)
 
 
@@ -512,5 +512,5 @@ def diff_jid(jid, config='root'):
 
         salt '*' snapper.diff_jid jid=20160607130930720112
     '''
-    pre_snapshot, post_snapshot = _get_jid_snapshot(jid, config=config)
+    pre_snapshot, post_snapshot = _get_jid_snapshots(jid, config=config)
     return diff(config, num_pre=pre_snapshot, num_post=post_snapshot)
