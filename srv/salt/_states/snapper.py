@@ -37,27 +37,28 @@ def baseline_snapshot(name, number=None, config='root', ignore=[]):
         elif os.path.isdir(f):
             [status.pop(x, None) for x in status.keys() if x.startswith(f)]
 
+
     # Only include changes for modified files
     for f in status:
         status[f]['action'] = status[f].pop("status")
         if "modified" in status[f]['action']:
             status[f]['diff'] = __salt__['snapper.diff'](config,
-                                                         num_pre=number,
-                                                         num_post=0, filename=f)
+                                                         num_pre=0,
+                                                         num_post=number, filename=f)
+
+    ret['changes']['files'] = status
 
     if not __opts__['test'] and status.keys():
         undo = __salt__['snapper.undo'](config, num_pre=number, num_post=0,
                                         files=status.keys())
         ret['changes']['sumary'] = undo
 
-    ret['changes']['files'] = status
-
     if __opts__['test'] and status:
         ret['pchanges'] = ret["changes"]
         ret['changes'] = {}
         ret['comment'] = "{0} files changes are set to be undone".format(len(status.keys()))
-        ret['result'] = None
-    elif not status:
-        ret['result'] = True
+    elif __opts__['test'] and not status:
+        ret['result'] = None if not status else True
+        ret['changes'] = {}
 
     return ret

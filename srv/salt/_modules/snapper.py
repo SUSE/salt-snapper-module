@@ -289,7 +289,7 @@ def create_snapshot(config='root', type='single', pre_number=None,
 
 def _get_num_interval(config, num_pre, num_post):
     post = int(num_post) if num_post else 0
-    pre = int(num_pre) if num_pre else _get_last_snapshot(config)['id']
+    pre = int(num_pre) if num_pre is not None else _get_last_snapshot(config)['id']
     return pre, post
 
 
@@ -487,7 +487,7 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
         pre, post = _get_num_interval(config, num_pre, num_post)
 
         files = changed_files(config, pre, post) if not filename else [filename]
-        pre_mount = snapper.MountSnapshot(config, pre, False)
+        pre_mount = snapper.MountSnapshot(config, pre, False) if pre else ""
         post_mount = snapper.MountSnapshot(config, post, False) if post else ""
 
         files_diff = dict()
@@ -504,7 +504,8 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
                                                              fromfile=pre_file,
                                                              tofile=post_file))
 
-        snapper.UmountSnapshot(config, pre, False)
+        if pre:
+            snapper.UmountSnapshot(config, pre, False)
         if post:
             snapper.UmountSnapshot(config, post, False)
         return files_diff
