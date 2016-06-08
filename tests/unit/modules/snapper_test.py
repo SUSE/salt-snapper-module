@@ -34,7 +34,7 @@ class SnapperTestCase(TestCase):
                     0, 'Some description', '', {'userdata1': 'userval1'}]
         data = snapper._snapshot_to_data(snapshot)
         self.assertEqual(data['id'], 42)
-        self.assertEqual(data['pre'], 41)
+        self.assertNotIn('pre', data)
         self.assertEqual(data['type'], 'pre')
         self.assertEqual(data['user'], 'root')
         self.assertEqual(data['timestamp'], 1457006571)
@@ -48,7 +48,7 @@ class SnapperTestCase(TestCase):
         self.assertEqual(
             snapper.list_snapshots(),
             [
-                {'pre': 0, 'userdata': {'userdata1': 'userval1'},
+                {'userdata': {'userdata1': 'userval1'},
                  'description':
                  'Some description', 'timestamp': 1457006571,
                  'cleanup': '', 'user': 'root', 'type': 'pre', 'id': 42},

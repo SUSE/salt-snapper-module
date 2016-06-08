@@ -42,7 +42,8 @@ def _snapshot_to_data(snapshot):
 
     data['id'] = snapshot[0]
     data['type'] = ['single', 'pre', 'post'][snapshot[1]]
-    data['pre'] = snapshot[2]
+    if data['type'] == 'post':
+        data['pre'] = snapshot[2]
 
     if snapshot[3] != -1:
         data['timestamp'] = snapshot[3]
