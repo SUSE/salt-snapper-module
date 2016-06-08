@@ -23,16 +23,25 @@ DBUS_RET = {
         [42, 1, 0, 1457006571,
          0, 'Some description', '', {'userdata1': 'userval1'}],
         [43, 2, 42, 1457006572,
-         0, 'Blah Blah', '', {'userdata2': 'userval2'}]]
+         0, 'Blah Blah', '', {'userdata2': 'userval2'}]],
 }
+
+MODULE_RET = [
+    {'userdata': {'userdata1': 'userval1'},
+     'description':
+     'Some description', 'timestamp': 1457006571,
+     'cleanup': '', 'user': 'root', 'type': 'pre', 'id': 42},
+    {'pre': 42, 'userdata': {'userdata2': 'userval2'},
+     'description':
+     'Blah Blah', 'timestamp': 1457006572,
+     'cleanup': '', 'user': 'root', 'type': 'post', 'id': 43}
+]
 
 
 class SnapperTestCase(TestCase):
 
     def test__snapshot_to_data(self):
-        snapshot = [42, 1, 41, 1457006571,
-                    0, 'Some description', '', {'userdata1': 'userval1'}]
-        data = snapper._snapshot_to_data(snapshot)
+        data = snapper._snapshot_to_data(DBUS_RET['ListSnapshots'][0])
         self.assertEqual(data['id'], 42)
         self.assertNotIn('pre', data)
         self.assertEqual(data['type'], 'pre')
@@ -47,17 +56,16 @@ class SnapperTestCase(TestCase):
             return_value=DBUS_RET['ListSnapshots'])
         self.assertEqual(
             snapper.list_snapshots(),
-            [
-                {'userdata': {'userdata1': 'userval1'},
-                 'description':
-                 'Some description', 'timestamp': 1457006571,
-                 'cleanup': '', 'user': 'root', 'type': 'pre', 'id': 42},
-                {'pre': 42, 'userdata': {'userdata2': 'userval2'},
-                 'description':
-                 'Blah Blah', 'timestamp': 1457006572,
-                 'cleanup': '', 'user': 'root', 'type': 'post', 'id': 43}
-            ]
+            MODULE_RET
         )
+
+    def test_get_snapshot(self):
+        snapper.snapper.GetSnapshot = MagicMock(
+            return_value=DBUS_RET['ListSnapshots'][0])
+
+        self.assertEqual(
+            snapper.get_snapshot(),
+            MODULE_RET[0])
 
 
 if __name__ == '__main__':
