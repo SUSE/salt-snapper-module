@@ -9,7 +9,7 @@ def __virtual__():
     return True
 
 
-def snapshot(name, number=None, config='root', ignore=[], commit=False):
+def snapshot(name, number=None, config='root', ignore=[]):
     '''
     Enforces that no file is modified comparing against a previously
     defined snapshot identified by number.
@@ -37,8 +37,9 @@ def snapshot(name, number=None, config='root', ignore=[], commit=False):
         elif os.path.isdir(f):
             [status.pop(x, None) for x in status.keys() if x.startswith(f)]
 
-    if commit:
-        status = __salt__['snapper.undo'](config, num_pre=number, num_post=0)
+    if not __opts__['test'] and status.keys():
+        undo = __salt__['snapper.undo'](config, num_pre=number, num_post=0, files=status.keys())
+        ret['changes']['sumary'] = undo
 
     ret['changes']['files'] = status
     return ret
