@@ -172,12 +172,12 @@ def _get_last_snapshot(config='root'):
     return snapshot_list[-1]
 
 
-def _status_to_string(status):
+def status_to_string(status):
     '''
     Converts a numeric dbus snapper status into a string
     '''
-    return {2: 'deleted', 8: 'modified',
-            1: 'created', 16: 'path'}.get(int(status), 'unknown')
+    return {2: 'created', 8: 'modified',
+            1: 'deleted'}.get(int(status), 'unknown')
 
 
 def get_config(name='root'):

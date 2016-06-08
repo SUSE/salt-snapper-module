@@ -37,6 +37,10 @@ def snapshot(name, number=None, config='root', ignore=[]):
         elif os.path.isdir(f):
             [status.pop(x, None) for x in status.keys() if x.startswith(f)]
 
+    # Only include changes for modified files
+    for f in [x for x in status if __salt__['snapper.status_to_string'](status[x]) == "modified"]:
+        status.update(__salt__['snapper.diff'](config, num_pre=number, num_post=0, filename=f))
+
     if not __opts__['test'] and status.keys():
         undo = __salt__['snapper.undo'](config, num_pre=number, num_post=0, files=status.keys())
         ret['changes']['sumary'] = undo
