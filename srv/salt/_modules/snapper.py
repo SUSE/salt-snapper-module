@@ -499,10 +499,20 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
             post_file_content = open(post_file).readlines() if os.path.isfile(post_file) else []
 
             if _is_text_file(post_file) or not post_file_content:
-                files_diff[f] = ''.join(difflib.unified_diff(pre_file_content,
-                                                             post_file_content,
-                                                             fromfile=pre_file,
-                                                             tofile=post_file))
+                files_diff[f] = {
+                    'comment': "text file",
+                    'diff': ''.join(difflib.unified_diff(pre_file_content,
+                                                         post_file_content,
+                                                         fromfile=pre_file,
+                                                         tofile=post_file))}
+
+            elif not _is_text_file(post_file) and post_file_content:
+                # This is a binary file
+                files_diff[f] = {
+                    'comment': "binary file",
+                    'old_sha256_digest': __salt__['hashutil.sha256_digest'](''.join(pre_file_content)),
+                    'new_sha256_digest': __salt__['hashutil.sha256_digest'](''.join(post_file_content))
+                }
 
         if pre:
             snapper.UmountSnapshot(config, pre, False)
