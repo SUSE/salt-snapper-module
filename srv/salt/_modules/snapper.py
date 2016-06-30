@@ -299,7 +299,7 @@ def _is_text_file(filename):
     return type_of_file.startswith('text')
 
 
-def run(config='root', function=None, args=[], description=None,
+def run(function, config='root', args=[], description=None,
         cleanup_algorithm='number', userdata={}, **kwargs):
     '''
     Runs a function from an execution module creating pre and post snapshots
@@ -307,8 +307,7 @@ def run(config='root', function=None, args=[], description=None,
     cleanup.
 
     .. code-block:: bash
-        salt '*' snapper.run function=file.append \
-          args='["/etc/motd", "some text"]
+        salt '*' snapper.run function=file.append args='["/etc/motd", "some text"]'
 
     This  would run append text to /etc/motd using the file.append
     module, and will create two snapshots, pre and post with the associated
@@ -325,7 +324,7 @@ def run(config='root', function=None, args=[], description=None,
         userdata=userdata,
         **kwargs)
 
-    ret = __salt__[function](*args, **kwargs)
+    ret = __salt__[function](*args)
 
     __salt__['snapper.create_snapshot'](
         config=config,
