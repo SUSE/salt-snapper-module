@@ -492,28 +492,37 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
         post_mount = snapper.MountSnapshot(config, post, False) if post else ""
 
         files_diff = dict()
-        for f in filter(lambda x: os.path.isfile(x), files):
+        for f in filter(lambda x: not os.path.isdir(x), files):
             pre_file = pre_mount + f
             post_file = post_mount + f
 
             pre_file_content = open(pre_file).readlines() if os.path.isfile(pre_file) else []
             post_file_content = open(post_file).readlines() if os.path.isfile(post_file) else []
 
-            if _is_text_file(post_file) or not post_file_content:
+            if _is_text_file(pre_file) or _is_text_file(post_file):
                 files_diff[f] = {
-                    'comment': "text file",
+                    'comment': "text file changed",
                     'diff': ''.join(difflib.unified_diff(pre_file_content,
                                                          post_file_content,
                                                          fromfile=pre_file,
                                                          tofile=post_file))}
+                if pre_file_content and not post_file_content:
+                    files_diff[f]['comment'] = "text file deleted"
+                if not pre_file_content and post_file_content:
+                    files_diff[f]['comment'] = "text file created"
 
-            elif not _is_text_file(post_file) and post_file_content:
+            elif not _is_text_file(pre_file) and not _is_text_file(post_file):
                 # This is a binary file
-                files_diff[f] = {
-                    'comment': "binary file",
-                    'old_sha256_digest': __salt__['hashutil.sha256_digest'](''.join(pre_file_content)),
-                    'new_sha256_digest': __salt__['hashutil.sha256_digest'](''.join(post_file_content))
-                }
+                files_diff[f] = {'comment': "binary file changed"}
+                if pre_file_content and post_file_content:
+                        files_diff[f]['old_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(pre_file_content))
+                        files_diff[f]['new_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(post_file_content))
+                elif post_file_content:
+                    files_diff[f]['comment'] = "binary file created"
+                    files_diff[f]['new_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(post_file_content))
+                elif pre_file_content:
+                    files_diff[f]['comment'] = "binary file deleted"
+                    files_diff['old_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(pre_file_content))
 
         if pre:
             snapper.UmountSnapshot(config, pre, False)
