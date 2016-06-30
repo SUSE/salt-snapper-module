@@ -324,6 +324,11 @@ def run(function, config='root', args=[], description=None,
         userdata=userdata,
         **kwargs)
 
+    if function not in __salt__:
+        raise CommandExecutionError(
+            'function "{0}" does not exist'.format(function)
+        )
+
     ret = __salt__[function](*args)
 
     __salt__['snapper.create_snapshot'](
