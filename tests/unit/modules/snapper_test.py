@@ -160,4 +160,4 @@ class SnapperTestCase(TestCase):
 
 if __name__ == '__main__':
     from integration import run_tests
-    run_tests(ZypperTestCase, needs_daemon=False)
+    run_tests(SnapperTestCase, needs_daemon=False)
