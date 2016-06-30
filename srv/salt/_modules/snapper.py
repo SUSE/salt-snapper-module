@@ -31,12 +31,12 @@ def __virtual__():
                 ' missing snapper')
     return 'snapper'
 
-
-bus = dbus.SystemBus()
-log = logging.getLogger(__name__)
-snapper = dbus.Interface(bus.get_object('org.opensuse.Snapper',
-                                        '/org/opensuse/Snapper'),
-                         dbus_interface='org.opensuse.Snapper')
+if HAS_DBUS:
+    log = logging.getLogger(__name__)
+    bus = dbus.SystemBus()
+    snapper = dbus.Interface(bus.get_object('org.opensuse.Snapper',
+                                            '/org/opensuse/Snapper'),
+                             dbus_interface='org.opensuse.Snapper')
 
 
 def _snapshot_to_data(snapshot):
@@ -180,8 +180,9 @@ def status_to_string(status):
     Converts a numeric dbus snapper status into a string
     '''
     STATUS_MAP = {
-        1: "deleted",
-        2: "created",
+        1: "created",
+        2: "deleted",
+        4: "type changed",
         8: "modified",
         16: "permission changed",
         32: "owner changed",
@@ -191,9 +192,9 @@ def status_to_string(status):
     }
 
     status_tuple = (
-        status & 0b00000001, status & 0b000000010, status & 0b00000100,
-        status & 0b00001000, status & 0b000010000, status & 0b00100000,
-        status & 0b01000000, status & 0b100000000,
+        status & 0b000000001, status & 0b000000010, status & 0b000000100,
+        status & 0b000001000, status & 0b000010000, status & 0b000100000,
+        status & 0b001000000, status & 0b010000000, status & 0b100000000
     )
 
     return [STATUS_MAP[status] for status in status_tuple if status]
