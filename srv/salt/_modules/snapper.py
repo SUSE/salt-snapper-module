@@ -526,7 +526,7 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
                     files_diff[f]['new_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(post_file_content))
                 elif pre_file_content:
                     files_diff[f]['comment'] = "binary file deleted"
-                    files_diff['old_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(pre_file_content))
+                    files_diff[f]['old_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(pre_file_content))
 
         if pre:
             snapper.UmountSnapshot(config, pre, False)
