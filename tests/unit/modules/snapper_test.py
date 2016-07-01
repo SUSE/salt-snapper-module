@@ -5,6 +5,7 @@ from salttesting import TestCase
 from salttesting.mock import (
     MagicMock,
     patch,
+    mock_open,
     NO_MOCK,
     NO_MOCK_REASON
 )
@@ -21,9 +22,11 @@ snapper.__salt__ = dict()
 DBUS_RET = {
     'ListSnapshots': [
         [42, 1, 0, 1457006571,
-         0, 'Some description', '', {'userdata1': 'userval1'}],
+         0, 'Some description', '',
+         {'userdata1': 'userval1', 'salt_jid': '20160607130930720112'}],
         [43, 2, 42, 1457006572,
-         0, 'Blah Blah', '', {'userdata2': 'userval2'}]
+         0, 'Blah Blah', '',
+         {'userdata2': 'userval2', 'salt_jid': '20160607130930720112'}]
     ],
     'ListConfigs': [
         [u'root', u'/', {
@@ -54,13 +57,13 @@ DBUS_RET = {
 MODULE_RET = {
     'SNAPSHOTS': [
         {
-            'userdata': {'userdata1': 'userval1'},
+            'userdata': {'userdata1': 'userval1', 'salt_jid': '20160607130930720112'},
             'description': 'Some description', 'timestamp': 1457006571,
             'cleanup': '', 'user': 'root', 'type': 'pre', 'id': 42
         },
         {
             'pre': 42,
-            'userdata': {'userdata2': 'userval2'},
+            'userdata': {'userdata2': 'userval2', 'salt_jid': '20160607130930720112'},
             'description': 'Blah Blah', 'timestamp': 1457006572,
             'cleanup': '', 'user': 'root', 'type': 'post', 'id': 43
         }
@@ -89,6 +92,20 @@ MODULE_RET = {
         '/var/cache/salt/minion/extmods/modules/snapper.py': {'status': ['modified']},
         '/var/cache/salt/minion/extmods/modules/snapper.pyc': {'status': ['modified']},
     },
+    'DIFF': {
+        '/tmp/foo2': {
+            'comment': 'text file created',
+            'diff': "--- /.snapshots/55/snapshot/tmp/foo2\n"
+                    "+++ /tmp/foo2\n"
+                    "@@ -0,0 +1 @@\n"
+                    "+another foobar\n",
+        },
+        '/var/cache/salt/minion/extmods/modules/snapper.pyc': {
+            'comment': 'binary file changed',
+            'new_sha256_digest': 'f18f971f1517449208a66589085ddd3723f7f6cefb56c141e3d97ae49e1d87fa',
+            'old_sha256_digest': 'e61f8b762d83f3b4aeb3689564b0ffbe54fa731a69a1e208dc9440ce0f69d19b',
+        }
+    }
 }
 
 class SnapperTestCase(TestCase):
@@ -136,10 +153,10 @@ class SnapperTestCase(TestCase):
     def test_status_to_string(self):
         self.assertEqual(snapper.status_to_string(1), ["created"])
         self.assertEqual(snapper.status_to_string(2), ["deleted"])
-        self.assertEqual(snapper.status_to_string(4), ["modified"])
-        self.assertEqual(snapper.status_to_string(8), ["type changed"])
+        self.assertEqual(snapper.status_to_string(4), ["type changed"])
+        self.assertEqual(snapper.status_to_string(8), ["modified"])
         self.assertEqual(snapper.status_to_string(16), ["permission changed"])
-        self.assertListEqual(snapper.status_to_string(24), ["type changed", "permission changed"])
+        self.assertListEqual(snapper.status_to_string(24), ["modified", "permission changed"])
         self.assertEqual(snapper.status_to_string(32), ["owner changed"])
         self.assertEqual(snapper.status_to_string(64), ["group changed"])
         self.assertListEqual(snapper.status_to_string(97), ["created", "owner changed", "group changed"])
@@ -188,7 +205,7 @@ class SnapperTestCase(TestCase):
     def test_changed_files(self):
         self.assertEqual(snapper.changed_files(), MODULE_RET['GETFILES'].keys())
 
-    @patch('salt.modules.snapper._get_num_interval', MagicMock(return_value=(42,43)))
+    @patch('salt.modules.snapper._get_num_interval', MagicMock(return_value=(42, 43)))
     @patch('salt.modules.snapper.status', MagicMock(return_value=MODULE_RET['GETFILES']))
     def test_undo(self):
         cmd_ret = 'create:0 modify:1 delete:0'
@@ -205,6 +222,18 @@ class SnapperTestCase(TestCase):
         with patch.dict(snapper.__salt__, {'cmd.run': MagicMock(return_value=cmd_ret)}):
             module_ret = {'create': '1', 'delete': '1', 'modify': '1'}
             self.assertEqual(snapper.undo(files=['/tmp/foo', '/tmp/foo2', '/tmp/foo3']), module_ret)
+
+    @patch('salt.modules.snapper.list_snapshots', MagicMock(return_value=MODULE_RET['SNAPSHOTS']))
+    def test__get_jid_snapshots(self):
+        self.assertEqual(
+            snapper._get_jid_snapshots("20160607130930720112"),
+            (MODULE_RET['SNAPSHOTS'][0]['id'], MODULE_RET['SNAPSHOTS'][1]['id'])
+        )
+
+    @patch('salt.modules.snapper._get_jid_snapshots', MagicMock(return_value=(42, 43)))
+    @patch('salt.modules.snapper.undo', MagicMock(return_value='create:1 modify:1 delete:1'))
+    def test_undo_jid(self):
+        self.assertEqual(snapper.undo_jid(20160607130930720112), 'create:1 modify:1 delete:1')
 
 
 if __name__ == '__main__':
