@@ -182,8 +182,8 @@ def status_to_string(status):
     STATUS_MAP = {
         1: "created",
         2: "deleted",
-        4: "modified",
-        8: "type changed",
+        4: "type changed",
+        8: "modified",
         16: "permission changed",
         32: "owner changed",
         64: "group changed",
