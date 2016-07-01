@@ -39,7 +39,16 @@ DBUS_RET = {
             u'TIMELINE_MIN_AGE': u'1800', u'TIMELINE_LIMIT_DAILY': u'4-10',
             u'SYNC_ACL': u'no', u'QGROUP': u'1/0'}
         ]
-    ]
+    ],
+    'GetFiles': [
+        ['/root/.viminfo', 8],
+        ['/tmp/foo', 52],
+        ['/tmp/foo2', 1],
+        ['/tmp/foo3', 2],
+        ['/var/log/snapper.log', 8],
+        ['/var/cache/salt/minion/extmods/modules/snapper.py', 8],
+        ['/var/cache/salt/minion/extmods/modules/snapper.pyc', 8],
+    ],
 }
 
 MODULE_RET = {
@@ -70,6 +79,15 @@ MODULE_RET = {
             u'TIMELINE_MIN_AGE': u'1800', u'TIMELINE_LIMIT_DAILY': u'4-10',
             u'SYNC_ACL': u'no', u'QGROUP': u'1/0'
         }
+    },
+    'GETFILES': {
+        '/root/.viminfo': {'status': ['modified']},
+        '/tmp/foo': {'status': ['type changed', 'permission changed', 'owner changed']},
+        '/tmp/foo2': {'status': ['created']},
+        '/tmp/foo3': {'status': ['deleted']},
+        '/var/log/snapper.log': {'status': ['modified']},
+        '/var/cache/salt/minion/extmods/modules/snapper.py': {'status': ['modified']},
+        '/var/cache/salt/minion/extmods/modules/snapper.pyc': {'status': ['modified']},
     },
 }
 
@@ -156,6 +174,37 @@ class SnapperTestCase(TestCase):
         with patch.dict(snapper.__salt__, patch_dict):
             self.assertEqual(snapper.run("test.ping"), True)
             self.assertRaises(CommandExecutionError, snapper.run, "unknown.func")
+
+    @patch('salt.modules.snapper._get_num_interval', MagicMock(return_value=(42,43)))
+    @patch('salt.modules.snapper.snapper.GetComparison', MagicMock())
+    @patch('salt.modules.snapper.snapper.GetFiles', MagicMock(return_value=DBUS_RET['GetFiles']))
+    def test_status(self):
+        self.assertItemsEqual(snapper.status(), MODULE_RET['GETFILES'])
+        self.assertItemsEqual(snapper.status(num_pre="42", num_post=43), MODULE_RET['GETFILES'])
+        self.assertItemsEqual(snapper.status(num_pre=42), MODULE_RET['GETFILES'])
+        self.assertItemsEqual(snapper.status(num_post=43), MODULE_RET['GETFILES'])
+
+    @patch('salt.modules.snapper.status', MagicMock(return_value=MODULE_RET['GETFILES']))
+    def test_changed_files(self):
+        self.assertEqual(snapper.changed_files(), MODULE_RET['GETFILES'].keys())
+
+    @patch('salt.modules.snapper._get_num_interval', MagicMock(return_value=(42,43)))
+    @patch('salt.modules.snapper.status', MagicMock(return_value=MODULE_RET['GETFILES']))
+    def test_undo(self):
+        cmd_ret = 'create:0 modify:1 delete:0'
+        with patch.dict(snapper.__salt__, {'cmd.run': MagicMock(return_value=cmd_ret)}):
+            module_ret = {'create': '0', 'delete': '0', 'modify': '1'}
+            self.assertEqual(snapper.undo(files=['/tmp/foo']), module_ret)
+
+        cmd_ret = 'create:1 modify:1 delete:0'
+        with patch.dict(snapper.__salt__, {'cmd.run': MagicMock(return_value=cmd_ret)}):
+            module_ret = {'create': '1', 'delete': '0', 'modify': '1'}
+            self.assertEqual(snapper.undo(files=['/tmp/foo', '/tmp/foo2']), module_ret)
+
+        cmd_ret = 'create:1 modify:1 delete:1'
+        with patch.dict(snapper.__salt__, {'cmd.run': MagicMock(return_value=cmd_ret)}):
+            module_ret = {'create': '1', 'delete': '1', 'modify': '1'}
+            self.assertEqual(snapper.undo(files=['/tmp/foo', '/tmp/foo2', '/tmp/foo3']), module_ret)
 
 
 if __name__ == '__main__':
