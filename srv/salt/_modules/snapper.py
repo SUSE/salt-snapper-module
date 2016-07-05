@@ -1,24 +1,34 @@
 # -*- coding: utf-8 -*-
 '''
 Module to manage filesystem snapshots with snapper
-:depends: - ``dbus`` Python module.
-:depends: - ``snapper`` http://snapper.io, available in most distros
-'''
 
-import salt.utils
-from salt.exceptions import CommandExecutionError
+:codeauthor:    Duncan Mac-Vicar P. <dmacvicar@suse.de>
+:codeauthor:    Pablo Suárez Hernández <psuarezhernandez@suse.de>
+:depends:       ``dbus`` Python module.
+:depends:       ``snapper`` http://snapper.io, available in most distros
+:maturity:      new
+:platform:      Linux
+'''
+from __future__ import absolute_import
+
 import logging
 import os
 import time
 import difflib
 from pwd import getpwuid
 
+from salt.exceptions import CommandExecutionError
+import salt.utils
+
+
 try:
+    # pylint: disable=wrong-import-order
     import dbus
     HAS_DBUS = True
 except ImportError:
     HAS_DBUS = False
 
+# pylint: disable=invalid-name
 log = logging.getLogger(__name__)
 
 
@@ -40,6 +50,9 @@ if HAS_DBUS:
 
 
 def _snapshot_to_data(snapshot):
+    '''
+    Returns snapshot data from a D-Bus response
+    '''
     data = {}
 
     data['id'] = snapshot[0]
@@ -221,7 +234,7 @@ def get_config(name='root'):
 
 
 def create_snapshot(config='root', type='single', pre_number=None,
-                    description=None, cleanup_algorithm='number', userdata={},
+                    description=None, cleanup_algorithm='number', userdata=None,
                     **kwargs):
     '''
     Creates an snapshot
@@ -255,6 +268,9 @@ def create_snapshot(config='root', type='single', pre_number=None,
     .. code-block:: bash
         salt '*' snapper.create_snapshot
     '''
+    if not userdata:
+        userdata = {}
+
     jid = kwargs.get('__pub_jid', None)
     if description is None and jid is not None:
         description = 'salt job {0}'.format(jid)
@@ -295,12 +311,15 @@ def _get_num_interval(config, num_pre, num_post):
 
 
 def _is_text_file(filename):
+    '''
+    Checks if a file is a text file
+    '''
     type_of_file = os.popen('file -bi {0}'.format(filename), 'r').read()
     return type_of_file.startswith('text')
 
 
-def run(function, config='root', args=[], description=None,
-        cleanup_algorithm='number', userdata={}, **kwargs):
+def run(function, config='root', args=None, description=None,
+        cleanup_algorithm='number', userdata=None, **kwargs):
     '''
     Runs a function from an execution module creating pre and post snapshots
     and associating the salt job id with those snapshots for easy undo and
@@ -316,6 +335,11 @@ def run(function, config='root', args=[], description=None,
 
     You can immediately see the changes
     '''
+    if not args:
+        args = []
+    if not userdata:
+        userdata = {}
+
     pre_nr = __salt__['snapper.create_snapshot'](
         config=config,
         type='pre',
@@ -366,10 +390,10 @@ def status(config='root', num_pre=None, num_post=None):
         pre, post = _get_num_interval(config, num_pre, num_post)
         snapper.CreateComparison(config, int(pre), int(post))
         files = snapper.GetFiles(config, int(pre), int(post))
-        status = {}
+        status_ret = {}
         for file in files:
-            status[file[0]] = {'status': status_to_string(file[1])}
-        return status
+            status_ret[file[0]] = {'status': status_to_string(file[1])}
+        return status_ret
     except dbus.DBusException as exc:
         raise CommandExecutionError(
             'Error encountered while listing changed files: {0}'
@@ -435,12 +459,14 @@ def undo(config='root', files=None, num_pre=None, num_post=None):
 
 
 def _get_jid_snapshots(jid, config='root'):
-    jid_snapshots = filter(lambda x: x['userdata'].get("salt_jid", False) == jid,
-                           list_snapshots(config))
+    '''
+    Returns pre/post snapshots made by a given Salt jid
+    '''
+    jid_snapshots = [x for x in list_snapshots(config) if x['userdata'].get("salt_jid") == jid]
 
     return (
-        filter(lambda x: x['type'] == "pre", jid_snapshots)[0]['id'],
-        filter(lambda x: x['type'] == "post", jid_snapshots)[0]['id']
+        [x for x in jid_snapshots if x['type'] == "pre"][0]['id'],
+        [x for x in jid_snapshots if x['type'] == "post"][0]['id']
     )
 
 
@@ -496,7 +522,7 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
         post_mount = snapper.MountSnapshot(config, post, False) if post else ""
 
         files_diff = dict()
-        for f in filter(lambda x: not os.path.isdir(x), files):
+        for f in [f for f in files if not os.path.isdir(f)]:
             pre_file = pre_mount + f
             post_file = post_mount + f
 
@@ -519,8 +545,8 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
                 # This is a binary file
                 files_diff[f] = {'comment': "binary file changed"}
                 if pre_file_content and post_file_content:
-                        files_diff[f]['old_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(pre_file_content))
-                        files_diff[f]['new_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(post_file_content))
+                    files_diff[f]['old_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(pre_file_content))
+                    files_diff[f]['new_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(post_file_content))
                 elif post_file_content:
                     files_diff[f]['comment'] = "binary file created"
                     files_diff[f]['new_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(post_file_content))

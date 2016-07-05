@@ -88,13 +88,12 @@ and include this change.
     Do not specify more than one baseline rule as only the last one will
     affect the result.
 
-:maintainer:    Duncan Mac-Vicar P. <dmacvicar@suse.de>
-                Pablo Suarez Hernandez <psuarezhernandez@suse.com>
+:codeauthor:    Duncan Mac-Vicar P. <dmacvicar@suse.de>
+:codeauthor:    Pablo Suarez Hernandez <psuarezhernandez@suse.de>
 :maturity:      new
 :platform:      Linux
 
 '''
-import salt.loader
 import logging
 import os
 
