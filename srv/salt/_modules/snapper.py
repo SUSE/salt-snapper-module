@@ -526,8 +526,8 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
             pre_file = pre_mount + f
             post_file = post_mount + f
 
-            pre_file_content = open(pre_file).readlines() if os.path.isfile(pre_file) else []
-            post_file_content = open(post_file).readlines() if os.path.isfile(post_file) else []
+            pre_file_content = salt.utils.fopen(pre_file).readlines() if os.path.isfile(pre_file) else []
+            post_file_content = salt.utils.fopen(post_file).readlines() if os.path.isfile(post_file) else []
 
             if _is_text_file(pre_file) or _is_text_file(post_file):
                 files_diff[f] = {
