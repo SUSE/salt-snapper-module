@@ -89,22 +89,37 @@ and include this change.
     affect the result.
 
 :codeauthor:    Duncan Mac-Vicar P. <dmacvicar@suse.de>
-:codeauthor:    Pablo Suarez Hernandez <psuarezhernandez@suse.de>
+:codeauthor:    Pablo Suárez Hernández <psuarezhernandez@suse.de>
+
 :maturity:      new
 :platform:      Linux
-
 '''
-import logging
-import os
 
-log = logging.getLogger(__name__)
+from __future__ import absolute_import
+
+import os
 
 
 def __virtual__():
-    return True
+    '''
+    Only load if the snapper module is available in __salt__
+    '''
+    return 'snapper' if 'snapper.diff' in __salt__ else False
 
 
-def baseline_snapshot(name, number=None, config='root', ignore=[]):
+def _get_baseline_from_tag(tag):
+    '''
+    Returns the last created baseline snapshot marked with `tag`
+    '''
+    last_snapshot = None
+    for snapshot in __salt__['snapper.list_snapshots']():
+        if tag == snapshot['userdata'].get("baseline_tag"):
+            if not last_snapshot or last_snapshot['timestamp'] < snapshot['timestamp']:
+                last_snapshot = snapshot
+    return last_snapshot
+
+
+def baseline_snapshot(name, number=None, tag=None, config='root', ignore=None):
     '''
     Enforces that no file is modified comparing against a previously
     defined snapshot identified by number.
@@ -112,34 +127,51 @@ def baseline_snapshot(name, number=None, config='root', ignore=[]):
     ignore
         List of files to ignore
     '''
+    if not ignore:
+        ignore = []
 
     ret = {'changes': {},
            'comment': '',
            'name': name,
            'result': True}
 
-    if number is None:
+    if number is None and tag is None:
         ret.update({'result': False,
-                    'comment': 'Snapshot number needs to be specified'})
+                    'comment': 'Snapshot tag or number must be specified'})
         return ret
+
+    if number and tag:
+        ret.update({'result': False,
+                    'comment': 'Cannot use snapshot tag and number at the same time'})
+        return ret
+
+    if tag:
+        snapshot = _get_baseline_from_tag(tag)
+        if not snapshot:
+            ret.update({'result': False,
+                        'comment': 'Baseline tag "{0}" not found'.format(tag)})
+            return ret
+        number = snapshot['id']
 
     status = __salt__['snapper.status'](
         config, num_pre=number, num_post=0)
 
-    for f in ignore:
-        if os.path.isfile(f):
-            status.pop(f, None)
-        elif os.path.isdir(f):
-            [status.pop(x, None) for x in status.keys() if x.startswith(f)]
+    for target in ignore:
+        if os.path.isfile(target):
+            status.pop(target, None)
+        elif os.path.isdir(target):
+            for target_file in [target_file for target_file in status.keys() if target_file.startswith(target)]:
+                status.pop(target_file, None)
 
-    for f in status:
-        status[f]['actions'] = status[f].pop("status")
+    for file in status:
+        status[file]['actions'] = status[file].pop("status")
 
         # Only include diff for modified files
-        if "modified" in status[f]['actions']:
-            status[f].update(__salt__['snapper.diff'](config,
-                                                      num_pre=0,
-                                                      num_post=number, filename=f)[f])
+        if "modified" in status[file]['actions']:
+            status[file].update(__salt__['snapper.diff'](config,
+                                                         num_pre=0,
+                                                         num_post=number,
+                                                         filename=file)[file])
 
     if __opts__['test'] and status:
         ret['pchanges'] = ret["changes"]

@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 '''
+Unit tests for the Snapper module
+
 :codeauthor:    Duncan Mac-Vicar P. <dmacvicar@suse.de>
 :codeauthor:    Pablo Suárez Hernández <psuarezhernandez@suse.de>
 '''
-import sys
-import os
+
+from __future__ import absolute_import
 
 from salttesting import TestCase
 from salttesting.mock import (
     MagicMock,
     patch,
     mock_open,
-    NO_MOCK,
-    NO_MOCK_REASON
 )
 
 from salt.exceptions import CommandExecutionError
@@ -65,11 +65,9 @@ FILE_CONTENT = {
         "post": "another foobar"
     },
     '/tmp/foo2': {
-        "pre": "",
         "post": "another foobar"
     }
 }
-
 
 MODULE_RET = {
     'SNAPSHOTS': [
@@ -125,24 +123,25 @@ MODULE_RET = {
                     "@@ -0,0 +1 @@\n"
                     "+another foobar",
         },
-        '/var/cache/salt/minion/extmods/modules/snapper.pyc': {
+        '/tmp/foo3': {
             'comment': 'binary file changed',
-            'new_sha256_digest': 'f18f971f1517449208a66589085ddd3723f7f6cefb56c141e3d97ae49e1d87fa',
             'old_sha256_digest': 'e61f8b762d83f3b4aeb3689564b0ffbe54fa731a69a1e208dc9440ce0f69d19b',
+            'new_sha256_digest': 'f18f971f1517449208a66589085ddd3723f7f6cefb56c141e3d97ae49e1d87fa',
         }
     }
 }
 
+
 class SnapperTestCase(TestCase):
     def setUp(self):
         self.dbus_mock = MagicMock()
-        self.DBusExceptionMock = MagicMock()
+        self.DBusExceptionMock = MagicMock()  # pylint: disable=invalid-name
         self.dbus_mock.configure_mock(DBusException=self.DBusExceptionMock)
         snapper.dbus = self.dbus_mock
         snapper.snapper = MagicMock()
 
     def test__snapshot_to_data(self):
-        data = snapper._snapshot_to_data(DBUS_RET['ListSnapshots'][0])
+        data = snapper._snapshot_to_data(DBUS_RET['ListSnapshots'][0])  # pylint: disable=protected-access
         self.assertEqual(data['id'], 42)
         self.assertNotIn('pre', data)
         self.assertEqual(data['type'], 'pre')
@@ -204,9 +203,9 @@ class SnapperTestCase(TestCase):
 
     @patch('salt.modules.snapper._get_last_snapshot', MagicMock(return_value={'id': 42}))
     def test__get_num_interval(self):
-        self.assertEqual(snapper._get_num_interval(config=None, num_pre=None, num_post=None), (42, 0))
-        self.assertEqual(snapper._get_num_interval(config=None, num_pre=None, num_post=50), (42, 50))
-        self.assertEqual(snapper._get_num_interval(config=None, num_pre=42, num_post=50), (42, 50))
+        self.assertEqual(snapper._get_num_interval(config=None, num_pre=None, num_post=None), (42, 0))  # pylint: disable=protected-access
+        self.assertEqual(snapper._get_num_interval(config=None, num_pre=None, num_post=50), (42, 50))  # pylint: disable=protected-access
+        self.assertEqual(snapper._get_num_interval(config=None, num_pre=42, num_post=50), (42, 50))  # pylint: disable=protected-access
 
     def test_run(self):
         patch_dict = {
@@ -251,7 +250,7 @@ class SnapperTestCase(TestCase):
     @patch('salt.modules.snapper.list_snapshots', MagicMock(return_value=MODULE_RET['SNAPSHOTS']))
     def test__get_jid_snapshots(self):
         self.assertEqual(
-            snapper._get_jid_snapshots("20160607130930720112"),
+            snapper._get_jid_snapshots("20160607130930720112"),  # pylint: disable=protected-access
             (MODULE_RET['SNAPSHOTS'][0]['id'], MODULE_RET['SNAPSHOTS'][1]['id'])
         )
 
@@ -277,20 +276,45 @@ class SnapperTestCase(TestCase):
     @patch('salt.modules.snapper.snapper.UmountSnapshot', MagicMock(return_value=""))
     @patch('salt.modules.snapper.changed_files', MagicMock(return_value=["/tmp/foo", "/tmp/foo2"]))
     @patch('salt.modules.snapper._is_text_file', MagicMock(return_value=True))
-    @patch('os.path.isfile', MagicMock(side_effect=[True, True, True, True]))
+    @patch('os.path.isfile', MagicMock(side_effect=[True, True, False, True]))
     @patch('os.path.isdir', MagicMock(return_value=False))
     def test_diff_text_files(self):
         fopen_effect = [
             mock_open(read_data=FILE_CONTENT["/tmp/foo"]['pre']).return_value,
             mock_open(read_data=FILE_CONTENT["/tmp/foo"]['post']).return_value,
-            mock_open(read_data=FILE_CONTENT["/tmp/foo2"]['pre']).return_value,
             mock_open(read_data=FILE_CONTENT["/tmp/foo2"]['post']).return_value,
         ]
         with patch('salt.utils.fopen') as fopen_mock:
-            fopen_mock.side_effect=fopen_effect
+            fopen_mock.side_effect = fopen_effect
             module_ret = {
                 "/tmp/foo": MODULE_RET['DIFF']["/tmp/foo"],
                 "/tmp/foo2": MODULE_RET['DIFF']["/tmp/foo2"],
+            }
+            self.assertEqual(snapper.diff(), module_ret)
+
+    @patch('salt.modules.snapper._get_num_interval', MagicMock(return_value=(55, 0)))
+    @patch('salt.modules.snapper.snapper.MountSnapshot', MagicMock(
+        side_effect=["/.snapshots/55/snapshot", "", "/.snapshots/55/snapshot", ""]))
+    @patch('salt.modules.snapper.snapper.UmountSnapshot', MagicMock(return_value=""))
+    @patch('salt.modules.snapper.changed_files', MagicMock(return_value=["/tmp/foo3"]))
+    @patch('salt.modules.snapper._is_text_file', MagicMock(return_value=False))
+    @patch('os.path.isfile', MagicMock(side_effect=[True, True]))
+    @patch('os.path.isdir', MagicMock(return_value=False))
+    @patch.dict(snapper.__salt__, {
+        'hashutil.sha256_digest': MagicMock(side_effect=[
+            "e61f8b762d83f3b4aeb3689564b0ffbe54fa731a69a1e208dc9440ce0f69d19b",
+            "f18f971f1517449208a66589085ddd3723f7f6cefb56c141e3d97ae49e1d87fa",
+        ])
+    })
+    def test_diff_binary_files(self):
+        fopen_effect = [
+            mock_open(read_data="dummy binary").return_value,
+            mock_open(read_data="dummy binary").return_value,
+        ]
+        with patch('salt.utils.fopen') as fopen_mock:
+            fopen_mock.side_effect = fopen_effect
+            module_ret = {
+                "/tmp/foo3": MODULE_RET['DIFF']["/tmp/foo3"],
             }
             self.assertEqual(snapper.diff(), module_ret)
 

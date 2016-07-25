@@ -4,11 +4,13 @@ Module to manage filesystem snapshots with snapper
 
 :codeauthor:    Duncan Mac-Vicar P. <dmacvicar@suse.de>
 :codeauthor:    Pablo Suárez Hernández <psuarezhernandez@suse.de>
+
 :depends:       ``dbus`` Python module.
 :depends:       ``snapper`` http://snapper.io, available in most distros
 :maturity:      new
 :platform:      Linux
 '''
+
 from __future__ import absolute_import
 
 import logging
@@ -22,36 +24,69 @@ import salt.utils
 
 
 try:
-    # pylint: disable=wrong-import-order
-    import dbus
+    import dbus  # pylint: disable=wrong-import-order
     HAS_DBUS = True
 except ImportError:
     HAS_DBUS = False
 
-# pylint: disable=invalid-name
-log = logging.getLogger(__name__)
+
+DBUS_STATUS_MAP = {
+    1: "created",
+    2: "deleted",
+    4: "type changed",
+    8: "modified",
+    16: "permission changed",
+    32: "owner changed",
+    64: "group changed",
+    128: "extended attributes changed",
+    256: "ACL info changed",
+}
+
+SNAPPER_DBUS_OBJECT = 'org.opensuse.Snapper'
+SNAPPER_DBUS_PATH = '/org/opensuse/Snapper'
+SNAPPER_DBUS_INTERFACE = 'org.opensuse.Snapper'
+
+log = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+bus = None  # pylint: disable=invalid-name
+snapper = None  # pylint: disable=invalid-name
+
+if HAS_DBUS:
+    bus = dbus.SystemBus()  # pylint: disable=invalid-name
+    if SNAPPER_DBUS_OBJECT in bus.list_activatable_names():
+        snapper = dbus.Interface(bus.get_object(SNAPPER_DBUS_OBJECT,  # pylint: disable=invalid-name
+                                                SNAPPER_DBUS_PATH),
+                                 dbus_interface=SNAPPER_DBUS_INTERFACE)
 
 
 def __virtual__():
     if not HAS_DBUS:
         return (False, 'The snapper module cannot be loaded:'
                 ' missing python dbus module')
-    if not salt.utils.which('snapper'):
+    elif not snapper:
         return (False, 'The snapper module cannot be loaded:'
                 ' missing snapper')
     return 'snapper'
 
-if HAS_DBUS:
-    log = logging.getLogger(__name__)
-    bus = dbus.SystemBus()
-    snapper = dbus.Interface(bus.get_object('org.opensuse.Snapper',
-                                            '/org/opensuse/Snapper'),
-                             dbus_interface='org.opensuse.Snapper')
-
 
 def _snapshot_to_data(snapshot):
     '''
-    Returns snapshot data from a D-Bus response
+    Returns snapshot data from a D-Bus response.
+
+    A snapshot D-Bus response is a dbus.Struct containing the
+    information related to a snapshot:
+
+    [id, type, pre_snapshot, timestamp, user, description,
+     cleanup_algorithm, userdata]
+
+    id: dbus.UInt32
+    type: dbus.UInt16
+    pre_snapshot: dbus.UInt32
+    timestamp: dbus.Int64
+    user: dbus.UInt32
+    description: dbus.String
+    cleaup_algorithm: dbus.String
+    userdata: dbus.Dictionary
     '''
     data = {}
 
@@ -63,15 +98,15 @@ def _snapshot_to_data(snapshot):
     if snapshot[3] != -1:
         data['timestamp'] = snapshot[3]
     else:
-        data['timestamp'] = time.time()
+        data['timestamp'] = int(time.time())
 
     data['user'] = getpwuid(snapshot[4])[0]
     data['description'] = snapshot[5]
     data['cleanup'] = snapshot[6]
 
     data['userdata'] = {}
-    for k, v in snapshot[7].items():
-        data['userdata'][k] = v
+    for key, value in snapshot[7].items():
+        data['userdata'][key] = value
 
     return data
 
@@ -149,10 +184,10 @@ def list_configs():
         )
 
 
-def _config_filter(x):
-    if isinstance(x, bool):
-        return 'yes' if x else 'no'
-    return x
+def _config_filter(value):
+    if isinstance(value, bool):
+        return 'yes' if value else 'no'
+    return value
 
 
 def set_config(name='root', **kwargs):
@@ -173,7 +208,7 @@ def set_config(name='root', **kwargs):
     '''
     try:
         data = dict((k.upper(), _config_filter(v)) for k, v in
-                    kwargs.iteritems() if not k.startswith('__'))
+                    kwargs.items() if not k.startswith('__'))
         snapper.SetConfig(name, data)
     except dbus.DBusException as exc:
         raise CommandExecutionError(
@@ -184,33 +219,24 @@ def set_config(name='root', **kwargs):
 
 
 def _get_last_snapshot(config='root'):
+    '''
+    Returns the last existing created snapshot
+    '''
     snapshot_list = sorted(list_snapshots(config), key=lambda x: x['id'])
     return snapshot_list[-1]
 
 
-def status_to_string(status):
+def status_to_string(dbus_status):
     '''
     Converts a numeric dbus snapper status into a string
     '''
-    STATUS_MAP = {
-        1: "created",
-        2: "deleted",
-        4: "type changed",
-        8: "modified",
-        16: "permission changed",
-        32: "owner changed",
-        64: "group changed",
-        128: "extended attributes changed",
-        256: "ACL info changed",
-    }
-
     status_tuple = (
-        status & 0b000000001, status & 0b000000010, status & 0b000000100,
-        status & 0b000001000, status & 0b000010000, status & 0b000100000,
-        status & 0b001000000, status & 0b010000000, status & 0b100000000
+        dbus_status & 0b000000001, dbus_status & 0b000000010, dbus_status & 0b000000100,
+        dbus_status & 0b000001000, dbus_status & 0b000010000, dbus_status & 0b000100000,
+        dbus_status & 0b001000000, dbus_status & 0b010000000, dbus_status & 0b100000000
     )
 
-    return [STATUS_MAP[status] for status in status_tuple if status]
+    return [DBUS_STATUS_MAP[status] for status in status_tuple if status]
 
 
 def get_config(name='root'):
@@ -233,7 +259,7 @@ def get_config(name='root'):
         )
 
 
-def create_snapshot(config='root', type='single', pre_number=None,
+def create_snapshot(config='root', snapshot_type='single', pre_number=None,
                     description=None, cleanup_algorithm='number', userdata=None,
                     **kwargs):
     '''
@@ -241,7 +267,7 @@ def create_snapshot(config='root', type='single', pre_number=None,
 
     config
         Configuration name.
-    type
+    snapshot_type
         Specifies the type of the new snapshot. Possible values are
         single, pre and post.
     pre_number
@@ -271,40 +297,43 @@ def create_snapshot(config='root', type='single', pre_number=None,
     if not userdata:
         userdata = {}
 
-    jid = kwargs.get('__pub_jid', None)
+    jid = kwargs.get('__pub_jid')
     if description is None and jid is not None:
         description = 'salt job {0}'.format(jid)
 
     if jid is not None:
         userdata['salt_jid'] = jid
 
-    nr = None
+    new_nr = None
     try:
-        if type == 'single':
-            nr = snapper.CreateSingleSnapshot(config, description,
-                                              cleanup_algorithm, userdata)
-        elif type == 'pre':
-            nr = snapper.CreatePreSnapshot(config, description,
-                                           cleanup_algorithm, userdata)
-        elif type == 'post':
+        if snapshot_type == 'single':
+            new_nr = snapper.CreateSingleSnapshot(config, description,
+                                                  cleanup_algorithm, userdata)
+        elif snapshot_type == 'pre':
+            new_nr = snapper.CreatePreSnapshot(config, description,
+                                               cleanup_algorithm, userdata)
+        elif snapshot_type == 'post':
             if pre_number is None:
                 raise CommandExecutionError(
                     "pre snapshot number 'pre_number' needs to be"
                     "specified for snapshots of the 'post' type")
-            nr = snapper.CreatePostSnapshot(config, pre_number, description,
-                                            cleanup_algorithm, userdata)
+            new_nr = snapper.CreatePostSnapshot(config, pre_number, description,
+                                                cleanup_algorithm, userdata)
         else:
             raise CommandExecutionError(
-                "Invalid snapshot type '{0}'", format(type))
+                "Invalid snapshot type '{0}'", format(snapshot_type))
     except dbus.DBusException as exc:
         raise CommandExecutionError(
             'Error encountered while listing changed files: {0}'
             .format(_dbus_exception_to_reason(exc, locals()))
         )
-    return nr
+    return new_nr
 
 
 def _get_num_interval(config, num_pre, num_post):
+    '''
+    Returns numerical interval based on optionals num_pre, num_post values
+    '''
     post = int(num_post) if num_post else 0
     pre = int(num_pre) if num_pre is not None else _get_last_snapshot(config)['id']
     return pre, post
@@ -355,17 +384,17 @@ def run(function, *args, **kwargs):
 
     You can immediately see the changes
     '''
-    config = kwargs.get("config", "root")
-    description = kwargs.get("description", "snapper.run[%s]" % function)
-    cleanup_algorithm = kwargs.get("cleanup_algorithm", "number")
-    userdata = kwargs.get("userdata", {})
+    config = kwargs.pop("config", "root")
+    description = kwargs.pop("description", "snapper.run[{0}]".format(function))
+    cleanup_algorithm = kwargs.pop("cleanup_algorithm", "number")
+    userdata = kwargs.pop("userdata", {})
 
-    func_kwargs = {k:v for k,v in kwargs.items() if not k.startswith('__')}
-    kwargs = {k:v for k,v in kwargs.items() if k.startswith('__')}
+    func_kwargs = dict((k, v) for k, v in kwargs.items() if not k.startswith('__'))
+    kwargs = dict((k, v) for k, v in kwargs.items() if k.startswith('__'))
 
     pre_nr = __salt__['snapper.create_snapshot'](
         config=config,
-        type='pre',
+        snapshot_type='pre',
         description=description,
         cleanup_algorithm=cleanup_algorithm,
         userdata=userdata,
@@ -378,12 +407,12 @@ def run(function, *args, **kwargs):
 
     try:
         ret = __salt__[function](*args, **func_kwargs)
-    except Exception as e:
-        ret = "\n".join([str(e), __salt__[function].__doc__])
+    except CommandExecutionError as exc:
+        ret = "\n".join([str(exc), __salt__[function].__doc__])
 
     __salt__['snapper.create_snapshot'](
         config=config,
-        type='post',
+        snapshot_type='post',
         pre_number=pre_nr,
         description=description,
         cleanup_algorithm=cleanup_algorithm,
@@ -487,12 +516,20 @@ def undo(config='root', files=None, num_pre=None, num_post=None):
 def _get_jid_snapshots(jid, config='root'):
     '''
     Returns pre/post snapshots made by a given Salt jid
+
+    Looks for 'salt_jid' entries into snapshots userdata which are created
+    when 'snapper.run' is executed.
     '''
     jid_snapshots = [x for x in list_snapshots(config) if x['userdata'].get("salt_jid") == jid]
+    pre_snapshot = [x for x in jid_snapshots if x['type'] == "pre"]
+    post_snapshot = [x for x in jid_snapshots if x['type'] == "post"]
+
+    if not pre_snapshot or not post_snapshot:
+        raise CommandExecutionError("Jid '{0}' snapshots not found".format(jid))
 
     return (
-        [x for x in jid_snapshots if x['type'] == "pre"][0]['id'],
-        [x for x in jid_snapshots if x['type'] == "post"][0]['id']
+        pre_snapshot[0]['id'],
+        post_snapshot[0]['id']
     )
 
 
@@ -551,9 +588,9 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
         post_mount = snapper.MountSnapshot(config, post, False) if post else ""
 
         files_diff = dict()
-        for f in [f for f in files if not os.path.isdir(f)]:
-            pre_file = pre_mount + f
-            post_file = post_mount + f
+        for filepath in [filepath for filepath in files if not os.path.isdir(filepath)]:
+            pre_file = pre_mount + filepath
+            post_file = post_mount + filepath
 
             if os.path.isfile(pre_file):
                 pre_file_exists = True
@@ -570,7 +607,7 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
                 post_file_exists = False
 
             if _is_text_file(pre_file) or _is_text_file(post_file):
-                files_diff[f] = {
+                files_diff[filepath] = {
                     'comment': "text file changed",
                     'diff': ''.join(difflib.unified_diff(pre_file_content,
                                                          post_file_content,
@@ -578,21 +615,21 @@ def diff(config='root', filename=None, num_pre=None, num_post=None):
                                                          tofile=post_file))}
 
                 if pre_file_exists and not post_file_exists:
-                    files_diff[f]['comment'] = "text file deleted"
+                    files_diff[filepath]['comment'] = "text file deleted"
                 if not pre_file_exists and post_file_exists:
-                    files_diff[f]['comment'] = "text file created"
+                    files_diff[filepath]['comment'] = "text file created"
 
             elif not _is_text_file(pre_file) and not _is_text_file(post_file):
                 # This is a binary file
-                files_diff[f] = {'comment': "binary file changed"}
+                files_diff[filepath] = {'comment': "binary file changed"}
                 if pre_file_exists:
-                    files_diff[f]['old_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(pre_file_content))
+                    files_diff[filepath]['old_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(pre_file_content))
                 if post_file_exists:
-                    files_diff[f]['new_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(post_file_content))
+                    files_diff[filepath]['new_sha256_digest'] = __salt__['hashutil.sha256_digest'](''.join(post_file_content))
                 if post_file_exists and not pre_file_exists:
-                    files_diff[f]['comment'] = "binary file created"
+                    files_diff[filepath]['comment'] = "binary file created"
                 if pre_file_exists and not post_file_exists:
-                    files_diff[f]['comment'] = "binary file deleted"
+                    files_diff[filepath]['comment'] = "binary file deleted"
 
         if pre:
             snapper.UmountSnapshot(config, pre, False)
@@ -624,3 +661,27 @@ def diff_jid(jid, config='root'):
     '''
     pre_snapshot, post_snapshot = _get_jid_snapshots(jid, config=config)
     return diff(config, num_pre=pre_snapshot, num_post=post_snapshot)
+
+
+def create_baseline(tag="baseline", config='root'):
+    '''
+    Creates a snapshot marked as baseline
+
+    tag
+        Tag name for the baseline
+
+    config
+        Configuration name.
+
+    CLI example:
+
+    .. code-block:: bash
+
+        salt '*' snapper.create_baseline
+        salt '*' snapper.create_baseline my_custom_baseline
+    '''
+    return __salt__['snapper.create_snapshot'](config=config,
+                                               snapshot_type='single',
+                                               description="baseline snapshot",
+                                               cleanup_algorithm="number",
+                                               userdata={"baseline_tag": tag})
